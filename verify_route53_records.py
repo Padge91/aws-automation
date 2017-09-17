@@ -1,6 +1,12 @@
 import boto3
 import credentials
+from platform import system
+import os
 
+# Set credentials in credentials.py file. Sample file is provided
+# Requires servers to be ping-able to work correctly - must do this because of variety of ports applications use
+# Run with 'python verify_route53_records.py
+# Output will be list of dictionaries indicating whether host was reachable or not
 
 # read AWS credentials
 def read_AWS_credentials():
@@ -107,12 +113,41 @@ def get_all_record_sets(route53_client):
 		exit(1)
 
 
+# send ping request to server
+def ping(host, hostname_field):
+
+	hostname = host[hostname_field]
+	if system().lower()=="windows":
+		params = "-n 1"
+	else:
+		params = "-c 1"
+
+	return_code = os.system("ping " + params + " " + hostname)
+	if return_code != 0:
+		print("Unable to reach host: " + hostname)
+	else:
+		print("Host reached successfully: " + hostname)
+	
+	return {"hostname":hostname, "success":(return_code == 0)}
+
+
+# send pings to all servers
+def ping_all(hosts, hostname_field):
+	all_responses = []
+
+	for i in range(0, len(hosts)):
+		all_responses.append(ping(hosts[i], hostname_field))
+
+	return all_responses
+
+
 # main method
 if __name__=="__main__":	
+	hostname_field = "Name"
 	region, access_key, secret_key = read_AWS_credentials()
 	client = connect_route53(region, access_key, secret_key)
 	record_sets = get_all_record_sets(client)
-	print(record_sets)
+	ping_all(record_sets, hostname_field)
 
 
 
