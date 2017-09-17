@@ -117,11 +117,14 @@ def get_all_record_sets(route53_client):
 def ping(host, hostname_field):
 
 	hostname = host[hostname_field]
+	
+	# test to see what flags to use
 	if system().lower()=="windows":
 		params = "-n 1"
 	else:
 		params = "-c 1"
 
+	# execute ping command and see what result is
 	return_code = os.system("ping " + params + " " + hostname)
 	if return_code != 0:
 		print("Unable to reach host: " + hostname)
@@ -141,13 +144,17 @@ def ping_all(hosts, hostname_field):
 	return all_responses
 
 
+# run all commands, same as main method
+def verify_all_records():
+        hostname_field = "Name"
+        region, access_key, secret_key = read_AWS_credentials()
+        client = connect_route53(region, access_key, secret_key)
+        record_sets = get_all_record_sets(client)
+        return ping_all(record_sets, hostname_field)
+
+
 # main method
 if __name__=="__main__":	
-	hostname_field = "Name"
-	region, access_key, secret_key = read_AWS_credentials()
-	client = connect_route53(region, access_key, secret_key)
-	record_sets = get_all_record_sets(client)
-	ping_all(record_sets, hostname_field)
-
+	verify_all_records()
 
 
