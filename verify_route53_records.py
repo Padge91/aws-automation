@@ -8,6 +8,7 @@ import os
 # Run with 'python verify_route53_records.py
 # Output will be list of dictionaries indicating whether host was reachable or not
 
+
 # read AWS credentials
 def read_AWS_credentials():
 	try:
@@ -115,17 +116,18 @@ def get_all_record_sets(route53_client):
 
 # send ping request to server
 def ping(host, hostname_field):
-
 	hostname = host[hostname_field]
 	
 	# test to see what flags to use
 	if system().lower()=="windows":
+		postfix = ">nul 2>&1"
 		params = "-n 1"
 	else:
+		postfix = ">/dev/null 2>&1" 
 		params = "-c 1"
 
 	# execute ping command and see what result is
-	return_code = os.system("ping " + params + " " + hostname)
+	return_code = os.system("ping " + params + " " + hostname + " " + postfix)
 	if return_code != 0:
 		print("Unable to reach host: " + hostname)
 	else:
