@@ -10,6 +10,25 @@ def read_AWS_credentials():
                 print("Error reading AWS credentials: " + str(e))
                 exit(1)
 
+# read second AWS credentials
+def read_AWS_credentials_alt():
+        try:
+                return credentials.aws_region_2, credentials.aws_access_key_2, credentials.aws_secret_key_2
+        except Exception as e:
+                print("Error reading alternate AWS credentials: " + str(e))
+                exit(1)
+
+
+# get regions
+def get_region():
+	aws_region, aws_access_key, aws_secret_key = read_AWS_credentials()
+	return aws_region
+
+
+def get_region_alt():
+	aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
+	return aws_region
+
 
 # connect to Route53 service
 def connect_route53():
@@ -17,10 +36,27 @@ def connect_route53():
 	return connect_to_service("route53", aws_region, aws_access_key, aws_secret_key)
 
 
+# connect to second Route53 service
+def connect_route53_alt():
+        aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
+        return connect_to_service("route53", aws_region, aws_access_key, aws_secret_key)
+
+
 # connect to S3 service
 def connect_s3():
         aws_region, aws_access_key, aws_secret_key = read_AWS_credentials()
         return connect_to_service("s3", aws_region, aws_access_key, aws_secret_key)
+
+
+# connect to second S3 service
+def connect_s3_alt():
+        aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
+        return connect_to_service("s3", aws_region, aws_access_key, aws_secret_key)
+
+
+
+
+
 
 
 # connect to arbitrary service
