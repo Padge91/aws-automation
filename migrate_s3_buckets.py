@@ -1,4 +1,6 @@
 import authenticate
+import os 
+
 
 migrated_bucket_suffix="-s3m"
 
@@ -79,11 +81,23 @@ def create_s3_buckets(s3_client, bucket_names):
 # download file from bucket
 def download_s3_file(s3_client, bucket_name, file_name):
 	try:
-		s3_client.meta.client.download_file(bucket_name, file_name, './'+file_name)
+		make_file_path(file_name)
+
+		with open(file_name, 'wb') as data:
+			s3_client.download_fileobj(bucket_name, file_name, data)
 		return True
 	except Exception as e:
 		print("Failed to download file: " + bucket_name + " - " + file_name + " - " + str(e))
 		return False
+
+
+# make a local directory for file if required
+def make_file_path(file_name):
+	if not os.path.exists(os.path.dirname(file_name)):
+		try:
+			os.makedirs(os.path.dirname(file_name))
+		except Exception as e: # Guard against race condition
+			return
 
 
 # download files from bucket
