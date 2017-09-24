@@ -26,6 +26,7 @@ def get_s3_buckets(s3_client):
 		return bucket_names
 	except Exception as e:
 		print("Error receiving buckets list: " + str(e))
+		exit(1)
 
 
 # get all S3 files in list of buckets
@@ -124,11 +125,21 @@ def upload_s3_files(s3_client, bucket_name, file_names):
 		upload_s3_file(s3_client, bucket_name, file_names[i])
 
 
-# main method
-def migrate_all_files():
-	source_client = authenticate.connect_s3()
-	destination_client = authenticate.connect_s3_alt()
+# remove file
+def remove_file(path):
+	try:
+		os.remove(path)
+	except Exception as e:
+		print("Unable to remove file: " + path + " - " + str(e))
 
+
+# remove files
+def remove_files(paths):
+	for i in range(0, len(paths)):
+		remove_file(paths[i])
+
+# main method
+def migrate_all_files(source_client, destination_client):
 	# create s3 buckets
 	all_buckets = get_s3_buckets(source_client)
 	create_s3_buckets_with_prefix(destination_client, all_buckets, migrated_bucket_suffix)
@@ -145,9 +156,14 @@ def migrate_all_files():
 		s3_paths[i]["bucket"] = s3_paths[i]["bucket"] + migrated_bucket_suffix
 		upload_s3_files(destination_client, s3_paths[i]["bucket"], s3_paths[i]["content"])
 	
+	# remove files
+	for i in range(0, len(s3_paths)):
+		remove_files(s3_paths[i]["content"])
 
 
 # main method
 if __name__=="__main__":
-	migrate_all_files()
+	source_client = authenticate.connect_s3()
+	destination_client = authenticate.connect_s3_alt()
+	migrate_all_files(source_client, destination_client)
 
