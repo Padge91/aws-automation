@@ -100,6 +100,17 @@ def make_file_path(file_name):
 			return
 
 
+# download file from bucket
+def upload_s3_file(s3_client, bucket_name, file_name):
+	try:
+		with open(file_name, 'rb') as data:
+			s3_client.upload_fileobj(data, bucket_name, file_name)
+		return True
+	except Exception as e:
+		print("Failed to upload file: " + bucket_name + " - " + file_name + " - " + str(e))
+		return False
+
+
 # download files from bucket
 def download_s3_files(s3_client, bucket_name, file_names):
 	for i in range(0, len(file_names)):
@@ -108,7 +119,9 @@ def download_s3_files(s3_client, bucket_name, file_names):
 
 
 # upload file
-#def upload_s3_file():
+def upload_s3_files(s3_client, bucket_name, file_names):
+	for i in range(0, len(file_names)):
+		upload_s3_file(s3_client, bucket_name, file_names[i])
 
 
 # main method
@@ -118,13 +131,20 @@ def migrate_all_files():
 
 	# create s3 buckets
 	all_buckets = get_s3_buckets(source_client)
-	#create_s3_buckets_with_prefix(destination_client, all_buckets, migrated_bucket_suffix)
+	create_s3_buckets_with_prefix(destination_client, all_buckets, migrated_bucket_suffix)
 
+	# get all files
 	s3_paths = get_all_s3_files_and_folders(source_client, all_buckets)
+
+	# download all relevant files
 	for i in range(0, len(s3_paths)):
 		download_s3_files(source_client, s3_paths[i]["bucket"], s3_paths[i]["content"])
 	
-	print(s3_paths)
+	# upload all relevant files
+	for i in range(0, len(s3_paths)):
+		s3_paths[i]["bucket"] = s3_paths[i]["bucket"] + migrated_bucket_suffix
+		upload_s3_files(destination_client, s3_paths[i]["bucket"], s3_paths[i]["content"])
+	
 
 
 # main method
