@@ -54,9 +54,28 @@ def connect_s3_alt():
         return connect_to_service("s3", aws_region, aws_access_key, aws_secret_key)
 
 
+# connect to EC2 service
+def connect_ec2():
+	aws_region, aws_access_key, aws_secret_key = read_AWS_credentials()
+	return connect_to_service("ec2", aws_region, aws_access_key, aws_secret_key)
 
 
+# connect to second EC2 service
+def connect_ec2_alt():
+	aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
+	return connect_to_service("ec2", aws_region, aws_access_key, aws_secret_key)
 
+
+# connect to IAM service
+def connect_iam():
+        aws_region, aws_access_key, aws_secret_key = read_AWS_credentials()
+        return connect_to_service("iam", aws_region, aws_access_key, aws_secret_key)
+
+
+# connect to second IAM service
+def connect_iam_alt():
+        aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
+        return connect_to_service("iam", aws_region, aws_access_key, aws_secret_key)
 
 
 # connect to arbitrary service
