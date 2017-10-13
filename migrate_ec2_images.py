@@ -94,14 +94,44 @@ def revoke_all_images_permissions(source_client, target_client, image_ids):
 		revoke_image_permissions(source_client, target_client, image_ids[i])
 
 
+# get subnet IDs
+def get_subnet_id(client):
+	subnets_field="Subnets"
+	subnet_id_field="SubnetId"
+
+	try:
+		response = client.describe_subnets(DryRun=False)
+		if subnets_field not in response:
+			raise Exception("Subnets field not found. Response is malformed.")
+
+		if len(response[subnets_field]) == 0:
+			raise Exception("No subnets found. There must exists at least one subnet to use.")
+			
+		#return the first subnet id cuz we don't really care if it's accessible, just want to make an image from it
+		if subnet_id_field not in response[subnets_field][0]:
+			raise Exception("Subnet ID field not found. Response is malformed.")
+		
+		return response[subnets_field][0][subnet_id_field]
+
+	except Exception as e:
+		print("Error retrieving Subnet Ids. These are required before proceeding.\nError: " + str(e))	
+		exit(1)
+
+
 # start an instance from an image
-def start_instance_from_image():
-	return
+def start_instance_from_image(client, image_id, subnet_id):
+	try:
+		response = client.run_instances(ImageId=image_id, MaxCount=1, MinCount=1, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}])
+		print(response)
+	except Exception as e:
+		print("Error starting EC2 instance from AMI " + str(image_id) + ".\nError: " + str(e))
+		
 
 
 # start intances from all images
-def start_instances_from_images():
-	return
+def start_instances_from_images(client, all_image_ids, subnet_id):
+	for i in range(0, len(all_image_ids)):
+		start_instance_from_image(client, all_image_ids[i], subnet_id)
 
 
 # terminate an instance
@@ -126,10 +156,12 @@ if __name__=="__main__":
 	share_all_images_permissions(source_ec2_client, destination_iam_client, image_ids)
 
 	# destination client start instance from each ami
-
+	# need to get subnet ID to launch
+	subnet_id = get_subnet_id(destination_ec2_client)
+	start_instances_from_images(destination_ec2_client, image_ids, subnet_id)
 
 	# destination client make images from each instance started
-
+	
 
 	# source client revoke launch permissions
 
