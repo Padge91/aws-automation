@@ -63,7 +63,9 @@ def modify_image_permissions(source_client, target_client, image_id, mode):
 	try:
 		# get user id for target
 		target_id = get_client_info(target_client)
-		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission={str(mode):[{"UserId":target_id, "Group":"all"}]}, UserIds=[target_id], DryRun=False)
+		launch_permission_body = {}
+		launch_permission_body[mode] = [{"UserId":target_id, "Group":"all"}]
+		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission=launch_permission_body, UserIds=[target_id], DryRun=False)
 	except Exception as e:
 		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ".\nError: " + str(e))
 
