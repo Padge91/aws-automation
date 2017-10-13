@@ -2,7 +2,7 @@ import authenticate
 import os 
 
 
-migrated_bucket_suffix="-s3m"
+default_migrated_bucket_suffix="-s3m"
 
 
 # list all s3 buckets
@@ -139,7 +139,7 @@ def remove_files(paths):
 		remove_file(paths[i])
 
 # main method
-def migrate_all_files(source_client, destination_client):
+def migrate_all_files(source_client, destination_client, migrated_bucket_suffix):
 	# create s3 buckets
 	all_buckets = get_s3_buckets(source_client)
 	create_s3_buckets_with_prefix(destination_client, all_buckets, migrated_bucket_suffix)
@@ -161,9 +161,29 @@ def migrate_all_files(source_client, destination_client):
 		remove_files(s3_paths[i]["content"])
 
 
+# more efficient main method
+def efficiently_migrate_all_files(source_client, destination_client, migrated_bucket_suffix):
+	# create s3 buckets
+	all_buckets - get_s3_buckets(source_client)
+	create_s3_buckets_with_prefix(destination_client, all_buckets, migrated_bucket_suffix)
+
+	# iterate through buckets getting files
+	for i in range(0, len(all_buckets)):
+		bucket_name = [all_buckets[i]]
+		s3_paths = get_all_s3_files_and_folders(source_client, bucket_name)
+		
+		# download all relevant files
+		for i2 in range(0, len(s3_paths)):
+			download_s3_files(source_client, s3_paths[i]["bucket"], s3_paths[i]["content"])
+			upload_s3_files(destination_client, s3_paths[i]["bucket"] + migrated_bucket_suffix, s3_paths[i]["content"])
+
+			# clean up file once uploaded
+			remove_files(s3_paths[i]["content"])
+
+
 # main method
 if __name__=="__main__":
 	source_client = authenticate.connect_s3()
 	destination_client = authenticate.connect_s3_alt()
-	migrate_all_files(source_client, destination_client)
+	migrate_all_files(source_client, destination_client, default_migrated_bucket_suffix)
 
