@@ -136,19 +136,18 @@ def start_instance_from_image(client, image, subnet_id):
 		ami_id=image[ami_field]
 		name=image[name_field]
 		tags=image[tags_field]
+		tags.append({"Key":"ami_name", "Value":name})
 
-		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, KeyName=name, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
+		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
 		print(response)
 	except Exception as e:
 		print("Error starting EC2 instance from AMI " + str(image_id) + ".\nError: " + str(e))
 		
 
-
 # start intances from all images
 def start_instances_from_images(client, all_images, subnet_id):
 	for i in range(0, len(all_images)):
 		start_instance_from_image(client, all_images[i], subnet_id)
-
 
 
 # get image ids from info list
