@@ -10,8 +10,12 @@ def list_images(ec2_client):
 	public_field="Public"
 	images_field="Images"
 	image_id_field="ImageId"
+	image_name_field="Name"
+	tags_field="Tags"
 
-	image_ids = []	
+	required_fields = [image_id_field, image_name_field, tags_field]
+
+	images_info = []	
 	
 	try:
 		images = ec2_client.describe_images(ExecutableUsers=[],DryRun=False)
@@ -20,12 +24,16 @@ def list_images(ec2_client):
 
 		for image in images[images_field]:
 			# dont care if the image is already pubic, it can be moved easily in that case
-			if public_field in image and image_id_field in image and image[public_field]==False:
-				image_ids.append(image[image_id_field])
+			if public_field in image and image[public_field] == False:
+				image_info={}
+				for field in required_fields:
+					if field in image:
+						image_info[field] = image[field]
+				images_info.append(image_info)
 		
-		return image_ids
+		return images_info
 	except Exception as e:
-		print("Unable to list EC2 images on source.\nError: " + str(e))
+		print("Unable to list EC2 images on client\nError: " + str(e))
 		exit(1)
 
 
@@ -119,9 +127,17 @@ def get_subnet_id(client):
 
 
 # start an instance from an image
-def start_instance_from_image(client, image_id, subnet_id):
+def start_instance_from_image(client, image, subnet_id):
 	try:
-		response = client.run_instances(ImageId=image_id, MaxCount=1, MinCount=1, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}])
+		name_field="Name"
+		ami_field="ImageId"
+		tags_field="Tags"
+
+		ami_id=image[ami_field]
+		name=image[name_field]
+		tags=image[tags_field]
+
+		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, KeyName=name, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
 		print(response)
 	except Exception as e:
 		print("Error starting EC2 instance from AMI " + str(image_id) + ".\nError: " + str(e))
@@ -129,9 +145,20 @@ def start_instance_from_image(client, image_id, subnet_id):
 
 
 # start intances from all images
-def start_instances_from_images(client, all_image_ids, subnet_id):
-	for i in range(0, len(all_image_ids)):
-		start_instance_from_image(client, all_image_ids[i], subnet_id)
+def start_instances_from_images(client, all_images, subnet_id):
+	for i in range(0, len(all_images)):
+		start_instance_from_image(client, all_images[i], subnet_id)
+
+
+
+# get image ids from info list
+def get_image_ids_from_info(images):
+	id_field = "ImageId"
+	response = []
+	for i in range(0, len(images)):
+		response.append(images[i][id_field])
+
+	return response
 
 
 # terminate an instance
@@ -152,13 +179,14 @@ if __name__=="__main__":
 	destination_iam_client = authenticate.connect_iam_alt()
 
 	# collect image ids and share them to target client
-	image_ids = list_images(source_ec2_client)
+	images_info = list_images(source_ec2_client)
+	image_ids = get_image_ids_from_info(images_info)
 	share_all_images_permissions(source_ec2_client, destination_iam_client, image_ids)
 
 	# destination client start instance from each ami
 	# need to get subnet ID to launch
 	subnet_id = get_subnet_id(destination_ec2_client)
-	start_instances_from_images(destination_ec2_client, image_ids, subnet_id)
+	start_instances_from_images(destination_ec2_client, images_info, subnet_id)
 
 	# destination client make images from each instance started
 	
