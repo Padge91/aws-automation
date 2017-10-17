@@ -2,9 +2,6 @@ import authenticate
 import os 
 
 
-create_images_from_instances_bool = False
-
-
 # list images
 def list_images(ec2_client):
 	public_field="Public"
@@ -12,8 +9,9 @@ def list_images(ec2_client):
 	image_id_field="ImageId"
 	image_name_field="Name"
 	tags_field="Tags"
+	type_field="VirtualizationType"
 
-	required_fields = [image_id_field, image_name_field, tags_field]
+	required_fields = [image_id_field, image_name_field, tags_field, type_field]
 
 	images_info = []	
 	
@@ -30,6 +28,7 @@ def list_images(ec2_client):
 					if field in image:
 						image_info[field] = image[field]
 				images_info.append(image_info)
+				break
 		
 		return images_info
 	except Exception as e:
@@ -132,16 +131,28 @@ def start_instance_from_image(client, image, subnet_id):
 		name_field="Name"
 		ami_field="ImageId"
 		tags_field="Tags"
+		vm_type_field="VirtualizationType"
 
 		ami_id=image[ami_field]
 		name=image[name_field]
-		tags=image[tags_field]
+		if tags_field in image:
+			tags=image[tags_field]
+		else:
+			tags = []
 		tags.append({"Key":"ami_name", "Value":name})
 
-		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType="t2.micro", NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
+		if vm_type_field not in image:
+			type="t2.micro"
+		else:
+			if image[vm_type_field]=="paravirtual":
+				type="t1.micro"
+			else:
+				type="t2.micro"
+	
+		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType=type, NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
 		print(response)
 	except Exception as e:
-		print("Error starting EC2 instance from AMI " + str(image_id) + ".\nError: " + str(e))
+		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
 		
 
 # start intances from all images
