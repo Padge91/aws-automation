@@ -2,6 +2,8 @@ import authenticate
 import os 
 
 
+error_images=[]
+
 # list images
 def list_images(ec2_client):
 	public_field="Public"
@@ -28,7 +30,6 @@ def list_images(ec2_client):
 					if field in image:
 						image_info[field] = image[field]
 				images_info.append(image_info)
-				break
 		
 		return images_info
 	except Exception as e:
@@ -153,6 +154,7 @@ def start_instance_from_image(client, image, subnet_id):
 		print(response)
 	except Exception as e:
 		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
+		error_images.append(image)
 		
 
 # start intances from all images
