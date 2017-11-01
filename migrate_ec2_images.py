@@ -72,22 +72,28 @@ def modify_image_permissions(source_client, target_client, image_id, mode):
 		# get user id for target
 		target_id = get_client_info(target_client)
 		launch_permission_body = {}
-		launch_permission_body[mode] = [{"UserId":target_id, "Group":"all"}]
+		launch_permission_body[mode] = [{"UserId":target_id}]
 		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission=launch_permission_body, UserIds=[target_id], DryRun=False)
 	except Exception as e:
-		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ".\nError: " + str(e))
+		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ". Error: " + str(e))
 
 
 # share image with another AWS account
-def share_image_permissions(source_client, target_client, image_id):
+def share_image_permissions(source_client, target_client, image):
 	add_key="Add"
+	id_field="ImageId"
+	name_field="Name"	
+
+	image_id=image[id_field]
+	image_name=image[name_field]
+	print("Sharing AMI: " + image_name")
 	modify_image_permissions(source_client, target_client, image_id, add_key)
 
 
 # share all images with another AWS account
-def share_all_images_permissions(source_client, target_client, image_ids):
-	for i in range(0, len(image_ids)):
-		share_image_permissions(source_client, target_client, image_ids[i])
+def share_all_images_permissions(source_client, target_client, images):
+	for i in range(0, len(images)):
+		share_image_permissions(source_client, target_client, images[i])
 
 
 # revoke image from another AWS account
@@ -163,16 +169,6 @@ def start_instances_from_images(client, all_images, subnet_id):
 		start_instance_from_image(client, all_images[i], subnet_id)
 
 
-# get image ids from info list
-def get_image_ids_from_info(images):
-	id_field = "ImageId"
-	response = []
-	for i in range(0, len(images)):
-		response.append(images[i][id_field])
-
-	return response
-
-
 # terminate an instance
 def terminate_instance():
 	return
@@ -191,14 +187,15 @@ if __name__=="__main__":
 	destination_iam_client = authenticate.connect_iam_alt()
 
 	# collect image ids and share them to target client
+	print("Getting list of images")
 	images_info = list_images(source_ec2_client)
-	image_ids = get_image_ids_from_info(images_info)
-	share_all_images_permissions(source_ec2_client, destination_iam_client, image_ids)
+	print("Sharing images")
+	share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client start instance from each ami
 	# need to get subnet ID to launch
-	subnet_id = get_subnet_id(destination_ec2_client)
-	start_instances_from_images(destination_ec2_client, images_info, subnet_id)
+	#subnet_id = get_subnet_id(destination_ec2_client)
+	#start_instances_from_images(destination_ec2_client, images_info, subnet_id)
 
 	# destination client make images from each instance started
 	
