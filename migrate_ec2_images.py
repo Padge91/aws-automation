@@ -4,8 +4,10 @@ import os
 
 error_images=[]
 
+
 # list images
-def list_images(ec2_client):
+def list_images(ec2_client,user_id):
+	owner_field="OwnerId"
 	public_field="Public"
 	images_field="Images"
 	image_id_field="ImageId"
@@ -19,12 +21,13 @@ def list_images(ec2_client):
 	
 	try:
 		images = ec2_client.describe_images(ExecutableUsers=[],DryRun=False)
+
 		if images_field not in images:
 			raise Exception("Image field not found. Response is malformed")
 
 		for image in images[images_field]:
 			# dont care if the image is already pubic, it can be moved easily in that case
-			if public_field in image and image[public_field] == False:
+			if owner_field in image and image[owner_field] == "143148225560":
 				image_info={}
 				for field in required_fields:
 					if field in image:
@@ -86,7 +89,7 @@ def share_image_permissions(source_client, target_client, image):
 
 	image_id=image[id_field]
 	image_name=image[name_field]
-	print("Sharing AMI: " + image_name")
+	print("Sharing AMI: " + image_id + "... " + image_name)
 	modify_image_permissions(source_client, target_client, image_id, add_key)
 
 
@@ -157,7 +160,6 @@ def start_instance_from_image(client, image, subnet_id):
 				type="t2.micro"
 	
 		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType=type, NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
-		print(response)
 	except Exception as e:
 		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
 		error_images.append(image)
@@ -167,6 +169,7 @@ def start_instance_from_image(client, image, subnet_id):
 def start_instances_from_images(client, all_images, subnet_id):
 	for i in range(0, len(all_images)):
 		start_instance_from_image(client, all_images[i], subnet_id)
+		return
 
 
 # terminate an instance
@@ -188,14 +191,15 @@ if __name__=="__main__":
 
 	# collect image ids and share them to target client
 	print("Getting list of images")
-	images_info = list_images(source_ec2_client)
+	client_id = get_client_info(source_iam_client)
+	images_info = list_images(source_ec2_client, client_id)
 	print("Sharing images")
 	share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client start instance from each ami
 	# need to get subnet ID to launch
-	#subnet_id = get_subnet_id(destination_ec2_client)
-	#start_instances_from_images(destination_ec2_client, images_info, subnet_id)
+	subnet_id = get_subnet_id(destination_ec2_client)
+	start_instances_from_images(destination_ec2_client, images_info, subnet_id)
 
 	# destination client make images from each instance started
 	

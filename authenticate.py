@@ -77,7 +77,6 @@ def connect_iam_alt():
         aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
         return connect_to_service("iam", aws_region, aws_access_key, aws_secret_key)
 
-
 # connect to arbitrary service
 def connect_to_service(service_name, region, access_key, secret_key):
         try:
