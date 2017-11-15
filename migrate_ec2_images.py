@@ -87,11 +87,8 @@ def create_image(ec2_client, instance_id):
 		
 		#collapse tags
 		collapsed_tags = {}
-		print(instance_tags)
 		for item in instance_tags:
-			print(item)
 			collapsed_tags[item["Key"]] = item["Value"]
-		print(collapsed_tags)
 
 		# get name and description
 		image_name = collapsed_tags["ami_name"]
