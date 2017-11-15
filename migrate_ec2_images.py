@@ -3,6 +3,26 @@ import os
 
 
 error_images=[]
+error_instances=[]
+
+trial_run=True
+
+
+# get image attribute
+def get_image_description(ec2_client, ami):
+	value_field="Value"
+
+	try:
+		response_field = "Description"
+		response = ec2_client.describe_image_attribute(Attribute="description", ImageId=ami, DryRun=False)
+		if response_field not in response or value_field not in response[response_field]:
+			raise Exception("Description response is malformed.")
+		else:
+			return response[response_field][value_field]
+	except Exception as e:
+		print("Could not get description of AMI: " + ami + ".\nError: " + str(e))
+		error_images.append(ami)
+		return "Default description."
 
 
 # list images
@@ -32,6 +52,7 @@ def list_images(ec2_client,user_id):
 				for field in required_fields:
 					if field in image:
 						image_info[field] = image[field]
+				image_info["image_description"] = get_image_description(ec2_client, image_info[image_id_field])
 				images_info.append(image_info)
 		
 		return images_info
@@ -40,14 +61,67 @@ def list_images(ec2_client,user_id):
 		exit(1)
 
 
+# get instance tags
+def get_instance_tags(ec2_client, instance_id):
+	try:
+		reservations_field="Reservations"
+		instances_field="Instances"
+		tags_field = "Tags"
+		tags = []
+
+		response = ec2_client.describe_instances(InstanceIds=[instance_id], DryRun=False)
+
+		#if reservations_field not in response or len(response[reservations_field]) == 0 or instances_field not in response[reservations_field][0] or len(response[reservations_field][0][instances_field]) == 0 or tags_field not in response[reservations_field][0][instances_field][0]:
+		#	return []
+		#else:
+		return response[reservations_field][0][instances_field][0][tags_field]
+	except Exception as e:
+		return []
+
+
 # create image for running instance
-def create_image():
-	return 
+def create_image(ec2_client, instance_id):
+	try:
+		#get tag values from instance and apply to image
+		instance_tags = get_instance_tags(ec2_client, instance_id)
+		
+		#collapse tags
+		collapsed_tags = {}
+		print(instance_tags)
+		for item in instance_tags:
+			print(item)
+			collapsed_tags[item["Key"]] = item["Value"]
+		print(collapsed_tags)
+
+		# get name and description
+		image_name = collapsed_tags["ami_name"]
+		del collapsed_tags["ami_name"]
+
+		image_description = collapsed_tags["ami_description"]
+		del collapsed_tags["ami_description"]
+
+		# expand tags, what a pain
+		image_tags=[]
+		for key in collapsed_tags.keys():
+			image_tags.append({"Key":key, "Value":collapsed_tags[key]})
+
+		ec2_client.create_image(Name=image_name, Description=image_description, InstanceId=instance_id, DryRun=False, NoReboot=False)
+
+		#tag image
+
+
+	except Exception as e:
+		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
+		error_instances.append(instance_id)
+		return 
 
 
 # create images for all running instances
-def create_all_images():
-	return
+def create_all_images(ec2_client, all_instances):
+	for i in range(0, len(all_instances)):
+		create_image(ec2_client, all_instances[i])
+		if trial_run:
+			return
 
 
 # get configured user info
@@ -79,6 +153,7 @@ def modify_image_permissions(source_client, target_client, image_id, mode):
 		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission=launch_permission_body, UserIds=[target_id], DryRun=False)
 	except Exception as e:
 		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ". Error: " + str(e))
+		error_images.append(image_id)
 
 
 # share image with another AWS account
@@ -97,6 +172,8 @@ def share_image_permissions(source_client, target_client, image):
 def share_all_images_permissions(source_client, target_client, images):
 	for i in range(0, len(images)):
 		share_image_permissions(source_client, target_client, images[i])
+		if trial_run:
+			return
 
 
 # revoke image from another AWS account
@@ -142,14 +219,18 @@ def start_instance_from_image(client, image, subnet_id):
 		ami_field="ImageId"
 		tags_field="Tags"
 		vm_type_field="VirtualizationType"
+		description_field="Description"
 
 		ami_id=image[ami_field]
 		name=image[name_field]
+		description=image["image_description"]
+
 		if tags_field in image:
 			tags=image[tags_field]
 		else:
 			tags = []
 		tags.append({"Key":"ami_name", "Value":name})
+		tags.append({"Key":"ami_description", "Value":description})
 
 		if vm_type_field not in image:
 			type="t2.micro"
@@ -160,6 +241,8 @@ def start_instance_from_image(client, image, subnet_id):
 				type="t2.micro"
 	
 		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType=type, NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
+			
+		return response["Instances"][0]["InstanceId"]
 	except Exception as e:
 		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
 		error_images.append(image)
@@ -167,9 +250,13 @@ def start_instance_from_image(client, image, subnet_id):
 
 # start intances from all images
 def start_instances_from_images(client, all_images, subnet_id):
+	instance_ids = []
 	for i in range(0, len(all_images)):
-		start_instance_from_image(client, all_images[i], subnet_id)
-		return
+		instance_id = start_instance_from_image(client, all_images[i], subnet_id)
+		instance_ids.append(instance_id)
+		if trial_run:
+			return [instance_id]
+	return instance_ids
 
 
 # terminate an instance
@@ -193,16 +280,17 @@ if __name__=="__main__":
 	print("Getting list of images")
 	client_id = get_client_info(source_iam_client)
 	images_info = list_images(source_ec2_client, client_id)
+	
 	print("Sharing images")
 	share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client start instance from each ami
 	# need to get subnet ID to launch
 	subnet_id = get_subnet_id(destination_ec2_client)
-	start_instances_from_images(destination_ec2_client, images_info, subnet_id)
+	instance_ids = start_instances_from_images(destination_ec2_client, images_info, subnet_id)
 
 	# destination client make images from each instance started
-	
+	create_all_images(destination_ec2_client, instance_ids)
 
 	# source client revoke launch permissions
 
