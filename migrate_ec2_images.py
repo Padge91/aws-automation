@@ -3,7 +3,6 @@ import os
 import time
 
 error_images=[]
-error_instances=[]
 
 trial_run=True
 
@@ -92,7 +91,7 @@ def get_instance_state(ec2_client, instance_id):
 		# get instance state
 		return response[reservations_field][0][instances_field][0][state_field][name_field]
 	except Exception as e:
-		print("Can not determine instance state.\nError: " + str(e))
+		print("Can not determine instance state (this might be okay).\nError: " + str(e))
 		return None
 		
 
@@ -111,8 +110,7 @@ def create_image(ec2_client, instance_id, image_name="Default", image_descriptio
 
 	except Exception as e:
 		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
-		error_instances.append(instance_id)
-		return 
+		error_images.append(image_name)
 
 
 # create images for all running instances
@@ -304,13 +302,25 @@ def start_instances_from_images(client, all_images, subnet_id):
 
 
 # terminate an instance
-def terminate_instance():
-	return
+def terminate_instance(ec2_client, instance_id):
+	try:
+		response = ec2_client.terminate_instances(InstanceIds=[instance_id], DryRun=False)
+
+	except Exception as e:
+		print("Unable to terminate instance " + instance_id + ". Please don't forget to shut it off.\nError: " + str(e))	
 
 
 # terminate all instances
-def terminal_all_instances():
-	return
+def terminate_all_instances(ec2_client, instance_ids):
+	for i in range(0, len(instance_ids):
+		terminate_instance(ec2_client, instance_ids[i])
+
+
+# print out errors encountered
+def output_errors():
+	print("Number of errors with images: " + len(error_images))
+	print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found."
+	print("The full list of images follows:\n"+str(error_images)) 
 
 
 # main method
@@ -342,5 +352,6 @@ if __name__=="__main__":
 	# destination client terminate all instances
 	terminate_all_instances(destination_ec2_client, instances_ids)
 
+	output_errors()
 
 
