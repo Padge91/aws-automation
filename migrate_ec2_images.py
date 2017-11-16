@@ -1,6 +1,6 @@
 import authenticate
 import os 
-
+import time
 
 error_images=[]
 error_instances=[]
@@ -40,7 +40,7 @@ def list_images(ec2_client,user_id):
 	images_info = []	
 	
 	try:
-		images = ec2_client.describe_images(ExecutableUsers=[],DryRun=False)
+		images = ec2_client.describe_images(ImageIds=[], ExecutableUsers=[],DryRun=False)
 
 		if images_field not in images:
 			raise Exception("Image field not found. Response is malformed")
@@ -79,13 +79,55 @@ def get_instance_tags(ec2_client, instance_id):
 		return []
 
 
-# create image for running instance
-def create_image(ec2_client, instance_id):
+# get instance state
+def get_instance_state(ec2_client, instance_id):
 	try:
-		#get tag values from instance and apply to image
-		instance_tags = get_instance_tags(ec2_client, instance_id)
+		reservations_field="Reservations"
+		instances_field="Instances"
+		state_field="State"
+		name_field="Name"
+
+		response = ec2_client.describe_instances(InstanceIds=[instance_id], DryRun=False)
+
+		# get instance state
+		return response[reservations_field][0][instances_field][0][state_field][name_field]
+	except Exception as e:
+		print("Can not determine instance state.\nError: " + str(e))
+		return None
 		
-		#collapse tags
+
+
+# create image for running instance
+def create_image(ec2_client, instance_id, image_name="Default", image_description="Default"):
+	try:
+		image_field="ImageId"
+
+		response = ec2_client.create_image(Name=image_name, Description=image_description, InstanceId=instance_id, DryRun=False, NoReboot=False)
+	
+		if image_field not in response:
+			raise Exception("Repsonse is malformed.")
+
+		return response[image_field]
+
+	except Exception as e:
+		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
+		error_instances.append(instance_id)
+		return 
+
+
+# create images for all running instances
+def create_all_images(ec2_client, all_instances):
+	for i in range(0, len(all_instances)):
+		# wait for instance to be in running state
+		print("Waiting for instance " + all_instances[i] + " to be in running state.")
+		while True:
+			new_state = get_instance_state(ec2_client, all_instances[i])
+			if new_state is not None and new_state == "running":
+				break
+			time.sleep(5)
+		
+		#get instance tags
+		instance_tags = get_instance_tags(ec2_client, all_instances[i])
 		collapsed_tags = {}
 		for item in instance_tags:
 			collapsed_tags[item["Key"]] = item["Value"]
@@ -101,24 +143,29 @@ def create_image(ec2_client, instance_id):
 		image_tags=[]
 		for key in collapsed_tags.keys():
 			image_tags.append({"Key":key, "Value":collapsed_tags[key]})
-
-		ec2_client.create_image(Name=image_name, Description=image_description, InstanceId=instance_id, DryRun=False, NoReboot=False)
+	
+		# create image
+		print("Creating image for instance " + all_instances[i] + ".")
+		ami_id = create_image(ec2_client, all_instances[i], image_name, image_description)
 
 		#tag image
+		print("Tagging new image " + ami_id+".")
+		tag_image(ec2_client, ami_id, image_tags)
 
-
-	except Exception as e:
-		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
-		error_instances.append(instance_id)
-		return 
-
-
-# create images for all running instances
-def create_all_images(ec2_client, all_instances):
-	for i in range(0, len(all_instances)):
-		create_image(ec2_client, all_instances[i])
 		if trial_run:
 			return
+
+
+# tag an image
+def tag_image(ec2_client, ami_id, tags):
+	try:
+		if tags is None or len(tags) == 0:
+			return
+		ec2_client.create_tags(Resources=[ami_id], Tags=tags, DryRun=False)
+	except Exception as e:
+		print("Unable to tag image " + ami_id + ".\nError: " + str(e))
+		error_images.append(ami_id)
+		return
 
 
 # get configured user info
@@ -290,9 +337,10 @@ if __name__=="__main__":
 	create_all_images(destination_ec2_client, instance_ids)
 
 	# source client revoke launch permissions
-
+	revoke_all_image_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client terminate all instances
+	terminate_all_instances(destination_ec2_client, instances_ids)
 
 
 
