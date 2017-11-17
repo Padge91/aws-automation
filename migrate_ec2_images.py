@@ -20,7 +20,7 @@ def get_image_description(ec2_client, ami):
 			return response[response_field][value_field]
 	except Exception as e:
 		print("Could not get description of AMI: " + ami + ".\nError: " + str(e))
-		error_images.append(ami)
+		error_images.append("Could not get image description from image: " + ami)
 		return "Default description."
 
 
@@ -110,7 +110,7 @@ def create_image(ec2_client, instance_id, image_name="Default", image_descriptio
 
 	except Exception as e:
 		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
-		error_images.append(image_name)
+		error_images.append("Could not create image from instance " + instance_id + " based on image: " + image_name)
 
 
 # create images for all running instances
@@ -162,7 +162,7 @@ def tag_image(ec2_client, ami_id, tags):
 		ec2_client.create_tags(Resources=[ami_id], Tags=tags, DryRun=False)
 	except Exception as e:
 		print("Unable to tag image " + ami_id + ".\nError: " + str(e))
-		error_images.append(ami_id)
+		error_images.append("Could not add tags to image: " + ami_id)
 		return
 
 
@@ -195,7 +195,7 @@ def modify_image_permissions(source_client, target_client, image_id, mode):
 		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission=launch_permission_body, UserIds=[target_id], DryRun=False)
 	except Exception as e:
 		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ". Error: " + str(e))
-		error_images.append(image_id)
+		error_images.append("Could not share image: " + image_id)
 
 
 # share image with another AWS account
@@ -287,7 +287,7 @@ def start_instance_from_image(client, image, subnet_id):
 		return response["Instances"][0]["InstanceId"]
 	except Exception as e:
 		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
-		error_images.append(image)
+		error_images.append("Could not start instance from image: " + image)
 		
 
 # start intances from all images
@@ -321,7 +321,7 @@ def output_errors():
 	print("Number of errors with images: " + len(error_images))
 	if len(error_images) > 0:
 		print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found."
-		print("The full list of images follows:\n"+str(error_images)) 
+		print("The full list of images follows:\n"+"\n".join(error_images))
 
 
 # main method
