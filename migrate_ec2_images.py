@@ -319,12 +319,17 @@ def terminate_all_instances(ec2_client, instance_ids):
 # print out errors encountered
 def output_errors():
 	print("Number of errors with images: " + len(error_images))
-	print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found."
-	print("The full list of images follows:\n"+str(error_images)) 
+	if len(error_images) > 0:
+		print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found."
+		print("The full list of images follows:\n"+str(error_images)) 
 
 
 # main method
 if __name__=="__main__":
+	if not authenticate.compare_regions():
+		print("EC2 images can only be migrated to the same region. To move the images to a new region, please use the copy script.")
+		exit(1)
+
 	source_ec2_client = authenticate.connect_ec2()
 	destination_ec2_client = authenticate.connect_ec2_alt()
 	source_iam_client = authenticate.connect_iam()

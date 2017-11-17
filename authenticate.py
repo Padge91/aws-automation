@@ -77,6 +77,7 @@ def connect_iam_alt():
         aws_region, aws_access_key, aws_secret_key = read_AWS_credentials_alt()
         return connect_to_service("iam", aws_region, aws_access_key, aws_secret_key)
 
+
 # connect to arbitrary service
 def connect_to_service(service_name, region, access_key, secret_key):
         try:
@@ -86,3 +87,11 @@ def connect_to_service(service_name, region, access_key, secret_key):
         except Exception as e:
                 print("Error connecting to AWS: " + str(e))
                 exit(1)
+
+
+# compare regions
+def compare_regions():
+	if read_AWS_credentials()[0] == read_AWS_credentials_alt()[0]:
+		return True
+	else:
+		return False
