@@ -3,7 +3,8 @@ import sys
 
 
 
-error_images = []
+error_ids = []
+testing = True
 
 # process cmd-line args
 def process_cmd_args():
@@ -36,9 +37,8 @@ def get_snapshots_for_amis(ec2_client, ami_list):
 		return snapshots	
 	
 	except Exception as e:
-		print("Could not get snapshot for ami " + str(ami) + ".\nError: " + str(e))
-		error_images.append("Couldn't get snapshots for AMI: " + str(ami))
-		return []
+		print("Could not get snapshots for ami list.\nError: " + str(e))
+		exit(1)
 		
 
 #confirm option
@@ -53,14 +53,38 @@ def confirm(type):
 		exit()
 
 
+# error output
+def output_errors():
+	print("\nNumber of errors: " + str(len(error_ids)))
+	if len(error_ids) > 0:
+		print("These Ids could have failed when getting snapshots, deleting the amis, or deleting the snapshots.")
+		print("The full list of IDs follows:\n"+"\n".join(error_ids))
+
+
 #delete images
 def delete_images(ec2_client, ami_list):
-	print("deleting images")
+	if testing:
+		return
+	
+	for i in range(0, len(ami_list)):
+		try:
+			ec2_client.deregister_image(ImageID=ami_list[i], DryRun=False)
+		except Exception as e:
+			print("Error deleting image " + ami_list[i] + ".\nError: " + str(e))
+			error_ids.append("Error deleting AMI: " + ami_lisy[i])
 
 
 #delete snapshots
 def delete_snapshots(ec2_client, snapshots_list):
-	print("deleting snapshots")
+	if testing:
+		return
+
+	for i in range(0, len(snapshots_list)):
+		try:
+			ec2_client.delete_snapshot(SnapshotId=snapshots_list[i], DryRun=False)
+		except Exception as e:
+			print("Error deleting snapshot " + snapshots_list[i] + ".\nError: " + str(e))
+			error_ids.append("Error deleting snapshot: " + snapshots_list[i])
 
 # main method
 if __name__=="__main__":
@@ -82,5 +106,6 @@ if __name__=="__main__":
 	confirm("snapshots")
 	delete_snapshots(ec2_client, snapshots_list)
 
+	output_errors()
 
 
