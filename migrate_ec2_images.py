@@ -143,11 +143,11 @@ def create_all_images(ec2_client, all_instances):
 			image_tags.append({"Key":key, "Value":collapsed_tags[key]})
 	
 		# create image
-		print("Creating image for instance " + all_instances[i] + ".")
+		print("Creating image for instance " + all_instances[i] + " (" + image_name + ").")
 		ami_id = create_image(ec2_client, all_instances[i], image_name, image_description)
 
 		#tag image
-		print("Tagging new image " + ami_id+".")
+		print("Tagging new image " + ami_id+" (" + image_name + ").")
 		tag_image(ec2_client, ami_id, image_tags)
 
 		if trial_run:
@@ -195,7 +195,7 @@ def modify_image_permissions(source_client, target_client, image_id, mode):
 		response = source_client.modify_image_attribute(Attribute="launchPermission", ImageId=image_id, LaunchPermission=launch_permission_body, UserIds=[target_id], DryRun=False)
 	except Exception as e:
 		print("Unable to "+mode+" permissions to AMI: " + str(image_id) + ". Error: " + str(e))
-		error_images.append("Could not share image: " + image_id)
+		error_images.append("Could not " + mode + " image permissions: " + image_id)
 
 
 # share image with another AWS account
@@ -206,12 +206,13 @@ def share_image_permissions(source_client, target_client, image):
 
 	image_id=image[id_field]
 	image_name=image[name_field]
-	print("Sharing AMI: " + image_id + "... " + image_name)
+	print("Sharing AMI: " + image_id + " (" + image_name + ")")
 	modify_image_permissions(source_client, target_client, image_id, add_key)
 
 
 # share all images with another AWS account
 def share_all_images_permissions(source_client, target_client, images):
+	print("Sharing image permissions.")
 	for i in range(0, len(images)):
 		share_image_permissions(source_client, target_client, images[i])
 		if trial_run:
@@ -219,15 +220,22 @@ def share_all_images_permissions(source_client, target_client, images):
 
 
 # revoke image from another AWS account
-def revoke_image_permissions(source_client, target_client, image_id):
+def revoke_image_permissions(source_client, target_client, image):
 	removal_key="Remove"
+	id_field="ImageId"
+	name_field="Name"
+
+	image_id=image[id_field]
+	image_name=image[name_field]
+	print("Revoking AMI: " + image_id + " (" + image_name+")")
 	modify_image_permissions(source_client, target_client, image_id, removal_key)
 
 
 # revoke all images from another AWS account
-def revoke_all_images_permissions(source_client, target_client, image_ids):
-	for i in range(0, len(image_ids)):
-		revoke_image_permissions(source_client, target_client, image_ids[i])
+def revoke_all_images_permissions(source_client, target_client, images):
+	print("Revoking image permissions.")
+	for i in range(0, len(images)):
+		revoke_image_permissions(source_client, target_client, images[i])
 
 
 # get subnet IDs
@@ -281,7 +289,8 @@ def start_instance_from_image(client, image, subnet_id):
 				type="t1.micro"
 			else:
 				type="t2.micro"
-	
+
+		print("Starting instance for AMI " + ami_id + " ("+name+")")	
 		response = client.run_instances(ImageId=ami_id, MaxCount=1, MinCount=1, InstanceType=type, NetworkInterfaces=[{"SubnetId":subnet_id, "DeviceIndex":0}], TagSpecifications=[{"ResourceType":"instance", "Tags":tags}])
 			
 		return response["Instances"][0]["InstanceId"]
@@ -304,6 +313,7 @@ def start_instances_from_images(client, all_images, subnet_id):
 # terminate an instance
 def terminate_instance(ec2_client, instance_id):
 	try:
+		print("Terminating instance: " + instance_id)
 		response = ec2_client.terminate_instances(InstanceIds=[instance_id], DryRun=False)
 
 	except Exception as e:
@@ -312,15 +322,15 @@ def terminate_instance(ec2_client, instance_id):
 
 # terminate all instances
 def terminate_all_instances(ec2_client, instance_ids):
-	for i in range(0, len(instance_ids):
+	for i in range(0, len(instance_ids)):
 		terminate_instance(ec2_client, instance_ids[i])
 
 
 # print out errors encountered
 def output_errors():
-	print("Number of errors with images: " + len(error_images))
+	print("\nNumber of errors with images: " + str(len(error_images)))
 	if len(error_images) > 0:
-		print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found."
+		print("These images could have either failed when being created from an instance, failed when starting an instance from the image, when the image can't be shared, when the image can't be tagged, or when the image description could not be found.")
 		print("The full list of images follows:\n"+"\n".join(error_images))
 
 
@@ -339,8 +349,8 @@ if __name__=="__main__":
 	print("Getting list of images")
 	client_id = get_client_info(source_iam_client)
 	images_info = list_images(source_ec2_client, client_id)
-	
-	print("Sharing images")
+
+	# soure client share launch permissions	
 	share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client start instance from each ami
@@ -352,10 +362,10 @@ if __name__=="__main__":
 	create_all_images(destination_ec2_client, instance_ids)
 
 	# source client revoke launch permissions
-	revoke_all_image_permissions(source_ec2_client, destination_iam_client, images_info)
+	revoke_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
 
 	# destination client terminate all instances
-	terminate_all_instances(destination_ec2_client, instances_ids)
+	terminate_all_instances(destination_ec2_client, instance_ids)
 
 	output_errors()
 
