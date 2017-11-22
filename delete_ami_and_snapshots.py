@@ -4,7 +4,7 @@ import sys
 
 
 error_ids = []
-testing = True
+testing = False
 
 # process cmd-line args
 def process_cmd_args():
@@ -32,6 +32,9 @@ def get_snapshots_for_amis(ec2_client, ami_list):
 		
 		for i in range(0, len(response[images_field])):
 			for i2 in range(0, len(response[images_field][i][device_array_field])):
+				if ebs_field not in response[images_field][i][device_array_field][i2]:
+					print("No EBS field: " + str(response[images_field][i][device_array_field][i2]))
+					continue
 				snapshots.append(response[images_field][i][device_array_field][i2][ebs_field][snapshot_id_field])
 	
 		return snapshots	
@@ -45,7 +48,7 @@ def get_snapshots_for_amis(ec2_client, ami_list):
 def confirm(type):
 	user_input = "Escape"
 	while user_input != "Y" and user_input != "N":
-		user_input =input("Are you sure you want to delete all " + type + "? This action is irreversible (Y/N)")
+		user_input = input("Are you sure you want to delete all " + str(type) + "? This action is irreversible (Y/N)")
 		user_input = user_input.upper()
 
 	if user_input == "N":
@@ -68,10 +71,10 @@ def delete_images(ec2_client, ami_list):
 	
 	for i in range(0, len(ami_list)):
 		try:
-			ec2_client.deregister_image(ImageID=ami_list[i], DryRun=False)
+			ec2_client.deregister_image(ImageId=ami_list[i], DryRun=False)
 		except Exception as e:
 			print("Error deleting image " + ami_list[i] + ".\nError: " + str(e))
-			error_ids.append("Error deleting AMI: " + ami_lisy[i])
+			error_ids.append("Error deleting AMI: " + ami_list[i])
 
 
 #delete snapshots
