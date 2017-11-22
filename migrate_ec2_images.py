@@ -3,9 +3,12 @@ import os
 import time
 
 error_images=[]
+completed_images=[]
 
-trial_run=True
+trial_run=False
+instance_limit_size=10
 
+skip_amis=["ami-13245964", "ami-127bdf6b", "ami-1250ca61", "ami-121cb36b", "ami-11fa3c68", "ami-11a50768", "ami-10b97869", "ami-10837367", "ami-101c6663", "ami-1018b269", "ami-1008cb69", "ami-0fea967c", "ami-0fce0d76", "ami-0fa7c678", "ami-0cfc0b75", "ami-0cc10c75", "ami-0c62be75", "ami-0c5e9475", "ami-0befb678", "ami-0bca0572", "ami-0b486678", "ami-0a2de573", "ami-0a09f673", "ami-09f06a7e", "ami-09ee4f70", "ami-098d2d70", "ami-0913547a", "ami-07bb677e", "ami-0779ce74", "ami-070dae7e", "ami-06de1b7f", "ami-068d537f", "ami-06449c7f", "ami-001c5177", "ami-0036b473", "ami-00ab6f79", "ami-01f82e78", "ami-02074071", "ami-02bd1875", "ami-02da087b", "ami-0314a070", "ami-0318bf7a", "ami-031cae70", "ami-035b997a", "ami-03dba674", "ami-03dd8e70", "ami-0469ac7d", "ami-0475be7d", "ami-0478cf77", "ami-04f65373", "ami-05665772", "ami-0569af7c", "ami-05d91c7c", "ami-1367f364", "ami-13f25b6a", "ami-1477a46d", "ami-14faa863", "ami-15b9186c", "ami-15c51b6c", "ami-16d01b6f", "ami-16eb4561", "ami-16ee2c6f", "ami-16ff126f", "ami-177f0e64", "ami-18a5036f", "ami-18de2661", "ami-19842260", "ami-198bc96a", "ami-1a53f463", "ami-1a93386d", "ami-1af83e63", "ami-1aff156d", "ami-1bf22b62", "ami-1c2e8065", "ami-1c69c26b", "ami-1ca77a65", "ami-1ca77c6b", "ami-1d05b56e", "ami-1d27656e", "ami-1d3c5d6a", "ami-1d860e6e", "ami-1dc7e57b", "ami-1ea40b69", "ami-1ece6669", "ami-1ece8069", "ami-1f906f66", "ami-1fbb1666", "ami-20639a59", "ami-2146e258", "ami-21a03552", "ami-21b57258", "ami-2235995b", "ami-2249b955", "ami-22c7015b", "ami-22d17e55", "ami-2339c35a", "ami-233cfb5a", "ami-238d8545", "ami-246fc35d", "ami-24a9695d", "ami-2520fe5c", "ami-253eea5c", "ami-25b57d5c", "ami-25cd335c", "ami-26954b51", "ami-269e6e5f", "ami-26b4705f", "ami-2739e85e", "ami-27629c50", "ami-278d265e", "ami-27d0085e", "ami-27ee435e", "ami-2868985f", "ami-28d5e04e", "ami-28ef4251", "ami-298ebe5e", "ami-29a14f50", "ami-29bc425e", "ami-2c1ca35f", "ami-2c67bb55", "ami-2cef5e5f", "ami-2d0da454", "ami-2d24595a", "ami-2ef60c57", "ami-2f1dc45c", "ami-2fce6956", "ami-2ff45856", "ami-30386a43", "ami-307b3c43", "ami-30954b47", "ami-310b4c42", "ami-3110a548", "ami-31bf4146", "ami-3208d24b", "ami-3255974b", "ami-329ddd41", "ami-32fa2c4b", "ami-3362b04a", "ami-3384554a", "ami-33f04340", "ami-3504d74c", "ami-357ea54c", "ami-35ac044c", "ami-36a4df45", "ami-372a814e", "ami-3741844e", "ami-383ae241", "ami-38630d4b", "ami-389c4541", "ami-3939e640", "ami-39519c40", "ami-39994e40", "ami-39aa7740", "ami-3f0ad046", "ami-3ed32447", "ami-3d77bc44", "ami-3c98c05a", "ami-3c5d9e45", "ami-3c51f645", "ami-3c0fa94f", "ami-3bcd6a42", "ami-3b12c242"]
 
 # get image attribute
 def get_image_description(ec2_client, ami):
@@ -45,6 +48,9 @@ def list_images(ec2_client,user_id):
 			raise Exception("Image field not found. Response is malformed")
 
 		for image in images[images_field]:
+			if image[image_id_field] in skip_amis:
+				continue
+
 			# dont care if the image is already pubic, it can be moved easily in that case
 			if owner_field in image and image[owner_field] == "143148225560":
 				image_info={}
@@ -110,48 +116,63 @@ def create_image(ec2_client, instance_id, image_name="Default", image_descriptio
 
 	except Exception as e:
 		print("Error creating image for instance " + str(instance_id) + ".\nError: "+str(e))
-		error_images.append("Could not create image from instance " + instance_id + " based on image: " + image_name)
+		error_images.append("Could not create image from instance " + str(instance_id) + " based on image: " + str(image_name))
+		raise Exception()
 
 
 # create images for all running instances
 def create_all_images(ec2_client, all_instances):
+	new_ami_ids=[]
+
 	for i in range(0, len(all_instances)):
-		# wait for instance to be in running state
-		print("Waiting for instance " + all_instances[i] + " to be in running state.")
-		while True:
-			new_state = get_instance_state(ec2_client, all_instances[i])
-			if new_state is not None and new_state == "running":
-				break
-			time.sleep(5)
-		
-		#get instance tags
-		instance_tags = get_instance_tags(ec2_client, all_instances[i])
-		collapsed_tags = {}
-		for item in instance_tags:
-			collapsed_tags[item["Key"]] = item["Value"]
-
-		# get name and description
-		image_name = collapsed_tags["ami_name"]
-		del collapsed_tags["ami_name"]
-
-		image_description = collapsed_tags["ami_description"]
-		del collapsed_tags["ami_description"]
-
-		# expand tags, what a pain
-		image_tags=[]
-		for key in collapsed_tags.keys():
-			image_tags.append({"Key":key, "Value":collapsed_tags[key]})
+		try:
+			# wait for instance to be in running state
+			if all_instances[i] is None:
+				continue
 	
-		# create image
-		print("Creating image for instance " + all_instances[i] + " (" + image_name + ").")
-		ami_id = create_image(ec2_client, all_instances[i], image_name, image_description)
+			print("Waiting for instance " + str(all_instances[i]) + " to be in running state.")
+			while True:
+				new_state = get_instance_state(ec2_client, all_instances[i])
+				if new_state is not None and new_state == "running":
+					break
+				time.sleep(5)
+			
+			#get instance tags
+			instance_tags = get_instance_tags(ec2_client, all_instances[i])
+			collapsed_tags = {}
+			for item in instance_tags:
+				collapsed_tags[item["Key"]] = item["Value"]
+	
+			# get name and description
+			image_name = collapsed_tags["ami_name"]
+			del collapsed_tags["ami_name"]
+	
+			image_description = collapsed_tags["ami_description"]
+			del collapsed_tags["ami_description"]
+	
+			# expand tags, what a pain
+			image_tags=[]
+			for key in collapsed_tags.keys():
+				image_tags.append({"Key":key, "Value":collapsed_tags[key]})
+		
+			# create image
+			print("Creating image for instance " + all_instances[i] + " (" + image_name + ").")
+			ami_id = create_image(ec2_client, all_instances[i], image_name, image_description)
+	
+			#tag image
+			print("Tagging new image " + ami_id +" (" + image_name + ").")
+			tag_image(ec2_client, ami_id, image_tags)
+		
+			new_ami_ids.append(ami_id)
+	
+			completed_images.append(all_instances[i]["ImageId"])
+	
+			if trial_run:
+				return
+		except Exception as e:
+			continue
 
-		#tag image
-		print("Tagging new image " + ami_id+" (" + image_name + ").")
-		tag_image(ec2_client, ami_id, image_tags)
-
-		if trial_run:
-			return
+	return new_ami_ids
 
 
 # tag an image
@@ -161,8 +182,8 @@ def tag_image(ec2_client, ami_id, tags):
 			return
 		ec2_client.create_tags(Resources=[ami_id], Tags=tags, DryRun=False)
 	except Exception as e:
-		print("Unable to tag image " + ami_id + ".\nError: " + str(e))
-		error_images.append("Could not add tags to image: " + ami_id)
+		print("Unable to tag image " + str(ami_id) + ".\nError: " + str(e))
+		error_images.append("Could not add tags to image: " + str(ami_id))
 		return
 
 
@@ -296,7 +317,7 @@ def start_instance_from_image(client, image, subnet_id):
 		return response["Instances"][0]["InstanceId"]
 	except Exception as e:
 		print("Error starting EC2 instance from image " + str(image) + ".\nError: " + str(e))
-		error_images.append("Could not start instance from image: " + image)
+		error_images.append("Could not start instance from image: " + str(image))
 		
 
 # start intances from all images
@@ -312,6 +333,9 @@ def start_instances_from_images(client, all_images, subnet_id):
 
 # terminate an instance
 def terminate_instance(ec2_client, instance_id):
+	if instance_id == None:
+		return
+
 	try:
 		print("Terminating instance: " + instance_id)
 		response = ec2_client.terminate_instances(InstanceIds=[instance_id], DryRun=False)
@@ -326,6 +350,58 @@ def terminate_all_instances(ec2_client, instance_ids):
 		terminate_instance(ec2_client, instance_ids[i])
 
 
+# wait for AMIS to be available
+def wait_for_available_amis(ec2_client, ami_list):
+	state_field="State"
+	pending_state="pending"
+	available_state="available"
+	failed_state="failed"
+	error_state="error"	
+
+	for i in range(0, len(ami_list)):
+		waiting=True
+		try:
+			if ami_list[i] == None:
+				continue
+
+			while waiting:
+				response = ec2_client.describe_images(ImageIds=[ami_list[i]],DryRun=False)
+				if len(response["Images"]) == 0:
+					raise Exception("AMI not found")
+	
+				state = response["Images"][0][state_field]
+				if state == available_state:
+					waiting=False
+					continue
+				elif state == pending_state:
+					waiting=True
+				elif state == failed_state or state == error_state:
+					raise Exception("AMI failed or error")
+				
+				time.sleep(10)
+		except Exception as e:
+			error_images.append("Can't wait for " + str(ami_list[i]))
+			print("Unable to wait for AMI " + str(ami_list[i]))
+			print("Error: " + str(e))
+
+
+# wait for instances to be terminated
+def wait_for_terminated_instances(ec2_client, instances_list):
+	for i in range(0, len(instances_list)):
+		if instances_list[i] == None:
+			continue
+		try:
+			waiting=True
+			while waiting:
+				state = get_instance_state(ec2_client, instances_list[i])
+				if state is not None and state == "terminated":
+					waiting=False
+					continue
+				time.sleep(10)
+		except Exception as e:
+			print("Unable to wait for instance: " + str(instances_list[i]))
+			print("Error: " + str(e))
+
 # print out errors encountered
 def output_errors():
 	print("\nNumber of errors with images: " + str(len(error_images)))
@@ -336,37 +412,65 @@ def output_errors():
 
 # main method
 if __name__=="__main__":
-	if not authenticate.compare_regions():
-		print("EC2 images can only be migrated to the same region. To move the images to a new region, please use the copy script.")
-		exit(1)
+	try:
+		if not authenticate.compare_regions():
+			print("EC2 images can only be migrated to the same region. To move the images to a new region, please use the copy script.")
+			exit(1)
+	
+		source_ec2_client = authenticate.connect_ec2()
+		destination_ec2_client = authenticate.connect_ec2_alt()
+		source_iam_client = authenticate.connect_iam()
+		destination_iam_client = authenticate.connect_iam_alt()
+	
+		# collect image ids and share them to target client
+		print("Getting list of images")
+		client_id = get_client_info(source_iam_client)
+		images_info = list_images(source_ec2_client, client_id)
+	
+		# soure client share launch permissions	
+		#share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
+	
+		# destination client start instance from each ami
+		# need to get subnet ID to launch
+		subnet_id = get_subnet_id(destination_ec2_client)
+	
+		# need to cycle in blocks so we don't hit the "InstanceRequestLimit" limit
+		i  = 0
+		while i < len(images_info):
+			next_i = i + instance_limit_size
+			if next_i > len(images_info):
+				next_i = len(images_info)
+			images_info_block = images_info[i:next_i]	
+	
+			instance_ids = start_instances_from_images(destination_ec2_client, images_info_block, subnet_id)
+	
+			# destination client make images from each instance started
+			new_amis = create_all_images(destination_ec2_client, instance_ids)
+			
+			# wait for all AMIs to be available
+			print("Waiting for AMIs to become available...")
+			wait_for_available_amis(destination_ec2_client, new_amis)
+		
+			# destination client terminate all instances
+			terminate_all_instances(destination_ec2_client, instance_ids)
+		
+			# wait for instances to be terminated
+			print("Waiting for instances to terminate...")
+			wait_for_terminated_instances(destination_ec2_client, instance_ids)
+	
+			i = next_i
+	
+		# source client revoke launch permissions
+		revoke_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
+	
+		output_errors()
+		print("\nCompleted images: " + str(completed_images))
 
-	source_ec2_client = authenticate.connect_ec2()
-	destination_ec2_client = authenticate.connect_ec2_alt()
-	source_iam_client = authenticate.connect_iam()
-	destination_iam_client = authenticate.connect_iam_alt()
+	except Exception as e:
+		print("Exiting...\nError: " + str(e))
+		output_errors()
+		print("\nCompleted images: " + str(completed_images))
 
-	# collect image ids and share them to target client
-	print("Getting list of images")
-	client_id = get_client_info(source_iam_client)
-	images_info = list_images(source_ec2_client, client_id)
 
-	# soure client share launch permissions	
-	share_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
-
-	# destination client start instance from each ami
-	# need to get subnet ID to launch
-	subnet_id = get_subnet_id(destination_ec2_client)
-	instance_ids = start_instances_from_images(destination_ec2_client, images_info, subnet_id)
-
-	# destination client make images from each instance started
-	create_all_images(destination_ec2_client, instance_ids)
-
-	# source client revoke launch permissions
-	revoke_all_images_permissions(source_ec2_client, destination_iam_client, images_info)
-
-	# destination client terminate all instances
-	terminate_all_instances(destination_ec2_client, instance_ids)
-
-	output_errors()
 
 
