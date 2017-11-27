@@ -52,7 +52,7 @@ def list_images(ec2_client,user_id):
 				continue
 
 			# dont care if the image is already pubic, it can be moved easily in that case
-			if owner_field in image and image[owner_field] == "143148225560":
+			if owner_field in image and image[owner_field] == user_id:
 				image_info={}
 				for field in required_fields:
 					if field in image:

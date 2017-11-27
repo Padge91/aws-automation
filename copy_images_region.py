@@ -3,9 +3,9 @@ import os
 import time
 
 
+only_images=["ami-ada81fd4", "ami-aef344d7", "ami-b4bd09cd", "ami-b6a116cf", "ami-b6bb0ccf", "ami-b7a91dce", "ami-baea5dc3", "ami-bfea5dc6", "ami-c01bafb9", "ami-c0bb0fb9", "ami-c2f740bb", "ami-c5f542bc", "ami-ce9324b7", "ami-d1d661a8", "ami-d3a116aa", "ami-d3bd0aaa", "ami-d68532af", "ami-d7c377ae", "ami-da9621a3", "ami-e10abe98", "ami-e2bb0f9b", "ami-e2eb5c9b", "ami-efa21696", "ami-fafe4983", "ami-fdb10584", "ami-ffed5a86"]
 error_images=[]
-trial_run=True
-
+trial_run=False
 
 # get image attribute
 def get_image_description(ec2_client, ami):
@@ -45,8 +45,11 @@ def list_images(ec2_client,user_id):
 			raise Exception("Image field not found. Response is malformed")
 
 		for image in images[images_field]:
+			if image[image_id_field] not in only_images:
+				continue
+		
 			# dont care if the image is already pubic, it can be moved easily in that case
-			if owner_field in image and image[owner_field] == "143148225560":
+			if owner_field in image and image[owner_field] == user_id:
 				image_info={}
 				for field in required_fields:
 					if field in image:
@@ -98,11 +101,6 @@ def copy_image(ec2_client, image, old_region):
 	image_description=image["image_description"]
 
 	try:
-		print(ami)
-		print(image_name)
-		print(image_description)
-		print(image)
-		exit()
 		response = ec2_client.copy_image(Name=image_name, Description=image_description, SourceImageId=ami, SourceRegion=old_region, DryRun=False)
 
 		#get new AMI from response
@@ -110,14 +108,16 @@ def copy_image(ec2_client, image, old_region):
 			raise Exception("Malformed response.")
 
 		new_ami = response["ImageId"]
-
+		print("Image (" + image_name + ") copied to new AMI ("+new_ami+") from region " + old_region + ".") 
+		
 		#tag image
 		if "Tags" in image:
 			tag_image(ec2_client, new_ami, image["Tags"])
+		print("Applying tags for image")
 
 	except Exception as e:
 		print("Unable to copy AMI: " + ami + " (" + image_name + ").\nError: " + str(e))
-		error_ids.append("Unable to copy AMI " + ami)
+		error_images.append("Unable to copy AMI " + ami)
 
 	
 # copy all images
@@ -152,10 +152,10 @@ def confirm_regions():
 
 # main method
 if __name__=="__main__":
-	source_region = confirm_regions()
-
 	source_ec2_client = authenticate.connect_ec2()
 	source_iam_client = authenticate.connect_iam()
+	destination_ec2_client = authenticate.connect_ec2_alt()
+	source_region = authenticate.read_AWS_credentials()[0]
 
 	# collect image ids and share them to target client
 	print("Getting list of images...")
@@ -164,5 +164,7 @@ if __name__=="__main__":
 
 	# run copy operation from old region
 	print("Copying images...")	
-	copy_all_images(source_ec2_client, images_info, source_region)
+	copy_all_images(destination_ec2_client, images_info, source_region)
 
+	print("Errors with images: ")
+	print(error_images)
